@@ -1,5 +1,14 @@
 data/*
 !data/mysql/
 data/mysql/*
-!data/mysql/*.sql
+# Only the final MySQL scripts are tracked; other files in data/mysql/ are scratch.
+!data/mysql/schema.sql
+!data/mysql/load_portable.sql
+!data/mysql/indexes.sql
+!data/mysql/query[1-5].sql
 __pycache__/
+# Internal review notes, not part of the submission.
+/mysql_code_review.txt
+# Benchmark outputs: only the final evidence is tracked.
+results/*
+!results/final/

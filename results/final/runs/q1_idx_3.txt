@@ -1,0 +1,91 @@
+--------------
+USE imdb
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Query 1: Best Movie of the Decade
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Highest-rated movies released in the chosen decade with at least 25,000 votes.
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Decade bounds: change @decade_start to evaluate a different decade.
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+SET @decade_start = 2020
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+SET @min_votes = 25000
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Last year of the decade, capped at the current year to exclude future releases.
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+SET @decade_end = LEAST(@decade_start + 9, YEAR(CURDATE()))
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+SELECT
+    b.tconst,
+    b.primaryTitle,
+    b.startYear,
+    r.averageRating,
+    r.numVotes
+FROM title_basics b
+JOIN title_ratings r ON r.tconst = b.tconst
+WHERE b.titleType = 'movie'
+  AND b.startYear BETWEEN @decade_start AND @decade_end
+  AND r.numVotes >= @min_votes
+ORDER BY r.averageRating DESC, r.numVotes DESC, b.tconst ASC
+LIMIT 20
+--------------
+
++------------+------------------------------------------------------+-----------+---------------+----------+
+| tconst     | primaryTitle                                         | startYear | averageRating | numVotes |
++------------+------------------------------------------------------+-----------+---------------+----------+
+| tt45368240 | You Can See Everything                               |      2026 |           9.0 |    40300 |
+| tt33175825 | Attack on Titan: The Last Attack                     |      2024 |           8.9 |    41045 |
+| tt11989890 | David Attenborough: A Life on Our Planet             |      2020 |           8.9 |    36567 |
+| tt28089784 | Punjab '95                                           |      2026 |           8.7 |   107089 |
+| tt15097216 | Jai Bhim                                             |      2021 |           8.6 |   237567 |
+| tt23849204 | 12th Fail                                            |      2023 |           8.6 |   180065 |
+| tt10189514 | Soorarai Pottru                                      |      2020 |           8.6 |   133597 |
+| tt9263550  | Rocketry: The Nambi Effect                           |      2022 |           8.6 |    63022 |
+| tt7466810  | 777 Charlie                                          |      2022 |           8.6 |    49186 |
+| tt2056785  | Wildwood                                             |      2026 |           8.6 |    32669 |
+| tt9362722  | Spider-Man: Across the Spider-Verse                  |      2023 |           8.5 |   563563 |
+| tt20850406 | Sita Ramam                                           |      2022 |           8.5 |    86724 |
+| tt24082438 | 20 Days in Mariupol                                  |      2023 |           8.5 |    66186 |
+| tt34365591 | Mahavatar Narsimha                                   |      2024 |           8.5 |    49425 |
+| tt26758372 | Meiyazhagan                                          |      2024 |           8.5 |    25251 |
+| tt15239678 | Dune: Part Two                                       |      2024 |           8.4 |   808202 |
+| tt33764258 | The Odyssey                                          |      2026 |           8.4 |   585220 |
+| tt10811166 | The Kashmir Files                                    |      2022 |           8.4 |   580390 |
+| tt12361178 | Drishyam 2                                           |      2021 |           8.4 |    46485 |
+| tt16492678 | Demon Slayer: Kimetsu no Yaiba - Tsuzumi Mansion Arc |      2021 |           8.4 |    37295 |
++------------+------------------------------------------------------+-----------+---------------+----------+
+20 rows in set (0.228 sec)
+
+Bye

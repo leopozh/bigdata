@@ -1,0 +1,9 @@
+-> Limit: 20 row(s)
+    -> Sort: r.averageRating DESC, r.numVotes DESC, b.tconst, limit input to 20 row(s) per chunk
+        -> Stream results  (cost=697015 rows=28892)
+            -> Nested loop inner join  (cost=697015 rows=28892)
+                -> Filter: (r.numVotes >= <cache>((@min_votes)))  (cost=61920 rows=577849)
+                    -> Table scan on r  (cost=61920 rows=1.73e+6)
+                -> Filter: ((b.titleType = 'movie') and (b.startYear between <cache>((@decade_start)) and <cache>((@decade_end))))  (cost=0.999 rows=0.05)
+                    -> Single-row index lookup on b using PRIMARY (tconst = r.tconst)  (cost=0.999 rows=1)
+

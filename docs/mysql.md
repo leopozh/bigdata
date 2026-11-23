@@ -149,7 +149,7 @@ Queries 2 and 3 start from people (deceased actors), so we tested an index on `t
 - Build: 3 min 17 s, 3.46 GB.
 - The optimizer did not use it for any of the five queries.
 - Adding the `deathYear` histogram corrected the optimizer's estimate of how many people have a death year (from a default guess to about 1.75%; the true value is 1.68%), but the plans still did not use the index.
-- Forcing the index with `JOIN_ORDER` hints (scratch copies only, measured with `EXPLAIN ANALYZE` and stopped at about 2x the baseline):
+- Forcing the index with `JOIN_ORDER` hints (scratch copies only, measured with `EXPLAIN ANALYZE` and stopped at about 2x the baseline, so neither run completed):
 
 | Query | Baseline (original plan) | Hinted plan (`nconst` index) | Progress when stopped |
 |---|---:|---:|---|
@@ -158,7 +158,9 @@ Queries 2 and 3 start from people (deceased actors), so we tested an index on `t
 
 The optimizer expected 17 credits per person; the actual average was 60–79. Each credit also needs a random lookup into the 6.4 GB clustered table to check `category`. The index was therefore dropped. The histogram was kept because it gives more accurate row estimates.
 
-### Earlier results
+### Saved evidence
+
+The raw outputs behind every number in this section (run outputs with timings, `EXPLAIN` plans, the index experiments, and the verification exports) are in `results/final/`. `results/final/verification/verify.py` recomputes the Q2, Q3 and Q5 checks from the saved exports without a database.
 
 The benchmark table in the previous version of this document was for an earlier set of queries and has been replaced.
 
@@ -176,11 +178,17 @@ To change the decade for Query 1, edit `@decade_start` at the top of `query1.sql
 
 Place the seven cleaned IMDb CSV files in `data/clean/`.
 
-From the repository root, run:
+Create the database and tables:
+
+    mysql -u root -p < data/mysql/schema.sql
+
+> **Warning:** `schema.sql` runs `DROP TABLE IF EXISTS` before creating each table. Running it on a loaded database deletes all seven tables and their data (about 217 million rows), and reloading takes a long time. Only run it to set up an empty database.
+
+From the repository root, load the data:
 
     mysql --local-infile=1 -u root -p imdb < data/mysql/load_portable.sql
 
-Run this only on an empty database after creating the tables with `schema.sql`. The CSV files are not included in GitHub because of their size.
+Run this only once, on the empty tables created by `schema.sql`. The CSV files are not included in GitHub because of their size.
 
 Then create the secondary indexes and the histogram once:
 

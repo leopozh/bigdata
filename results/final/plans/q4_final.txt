@@ -1,0 +1,9 @@
+-> Limit: 20 row(s)
+    -> Sort: principalCount DESC, b.tconst, limit input to 20 row(s) per chunk
+        -> Table scan on <temporary>
+            -> Aggregate using temporary table
+                -> Nested loop inner join  (cost=3.8e+6 rows=11.6e+6)
+                    -> Filter: (b.titleType = 'movie')  (cost=1.29e+6 rows=1.21e+6)
+                        -> Table scan on b  (cost=1.29e+6 rows=12.1e+6)
+                    -> Covering index lookup on p using PRIMARY (tconst = b.tconst)  (cost=1.11 rows=9.62)
+

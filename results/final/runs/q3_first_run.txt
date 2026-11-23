@@ -1,0 +1,78 @@
+--------------
+USE imdb
+--------------
+
+Query OK, 0 rows affected (0.001 sec)
+
+--------------
+-- Query 3: Longest Careers of Deceased Actors
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Career span = last valid movie credit year - first valid movie credit year,
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- counting only acting credits released between the actor's birth and death.
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+SELECT
+    n.nconst,
+    n.primaryName,
+    n.birthYear,
+    n.deathYear,
+    MIN(b.startYear)                    AS firstCreditYear,
+    MAX(b.startYear)                    AS lastCreditYear,
+    COUNT(DISTINCT b.tconst)            AS movieCount,
+    MAX(b.startYear) - MIN(b.startYear) AS careerSpan
+FROM name_basics n
+JOIN title_principals p ON p.nconst = n.nconst
+JOIN title_basics b     ON b.tconst = p.tconst
+WHERE n.deathYear IS NOT NULL                  -- deceased actors only (mandatory)
+  AND n.birthYear IS NOT NULL
+  AND p.category IN ('actor', 'actress')
+  AND b.titleType = 'movie'
+  AND b.startYear IS NOT NULL
+  AND b.startYear >= n.birthYear               -- no credits before birth
+  AND b.startYear <= n.deathYear               -- no credits after death
+  AND b.startYear <= YEAR(CURDATE())           -- no future films
+GROUP BY n.nconst, n.primaryName, n.birthYear, n.deathYear
+HAVING COUNT(DISTINCT b.tconst) >= 2
+ORDER BY careerSpan DESC, movieCount DESC, n.nconst ASC
+LIMIT 20
+--------------
+
++-----------+---------------------+-----------+-----------+-----------------+----------------+------------+------------+
+| nconst    | primaryName         | birthYear | deathYear | firstCreditYear | lastCreditYear | movieCount | careerSpan |
++-----------+---------------------+-----------+-----------+-----------------+----------------+------------+------------+
+| nm0782229 | Francia Seguy       |      1914 |      2013 |            1917 |           2004 |          6 |         87 |
+| nm0480675 | Carla Laemmle       |      1909 |      2014 |            1928 |           2013 |          4 |         85 |
+| nm0294914 | Karl Friedrich      |      1929 |      2021 |            1932 |           2016 |          9 |         84 |
+| nm0142704 | Gisèle Casadesus    |      1914 |      2017 |            1934 |           2017 |         29 |         83 |
+| nm0576754 | Hanna Maron         |      1923 |      2014 |            1929 |           2012 |         10 |         83 |
+| nm0843993 | Mária Szepes        |      1908 |      2007 |            1916 |           1999 |          5 |         83 |
+| nm0210274 | Alberto de Mendoza  |      1923 |      2011 |            1930 |           2011 |         92 |         81 |
+| nm0402554 | Marsha Hunt         |      1917 |      2022 |            1935 |           2016 |         57 |         81 |
+| nm0001682 | Mickey Rooney       |      1920 |      2014 |            1932 |           2012 |        143 |         80 |
+| nm0274286 | Bibi Ferreira       |      1922 |      2019 |            1936 |           2016 |          5 |         80 |
+| nm0201638 | Danielle Darrieux   |      1917 |      2017 |            1931 |           2010 |        102 |         79 |
+| nm0484736 | Inga Landgré        |      1927 |      2023 |            1943 |           2022 |         43 |         79 |
+| nm0580658 | Tita Merello        |      1904 |      2002 |            1918 |           1996 |         30 |         78 |
+| nm0001478 | June Lockhart       |      1925 |      2025 |            1941 |           2019 |         20 |         78 |
+| nm0487200 | Guzzi Lantschner    |      1910 |      2011 |            1931 |           2009 |          5 |         78 |
+| nm0038675 | Ashalata Wabgaonkar |      1941 |      2020 |            1941 |           2018 |         50 |         77 |
+| nm0000021 | Joan Fontaine       |      1917 |      2013 |            1935 |           2012 |         45 |         77 |
+| nm0044066 | Samiha Ayoub        |      1932 |      2025 |            1947 |           2024 |         40 |         77 |
+| nm0290539 | Eva Franco          |      1906 |      1999 |            1916 |           1993 |         13 |         77 |
+| nm0511276 | Anita Linda         |      1924 |      2020 |            1943 |           2019 |        310 |         76 |
++-----------+---------------------+-----------+-----------+-----------------+----------------+------------+------------+
+20 rows in set (2 min 9.524 sec)
+
+Bye

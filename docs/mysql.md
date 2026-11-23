@@ -42,3 +42,13 @@ From the project directory:
 `mysql -u root -p < data/mysql/query1.sql`
 
 Replace `query1.sql` with the desired query file.
+
+## Loading the data
+
+Place the seven cleaned IMDb CSV files in `data/clean/`.
+
+From the repository root, run:
+
+    mysql --local-infile=1 -u root -p imdb < data/mysql/load_portable.sql
+
+Run this only on an empty database after creating the tables with `schema.sql`. The CSV files are not included in GitHub because of their size.

@@ -1,0 +1,12 @@
+-> Sort: ranked.decade  (cost=3.85..3.85 rows=0)
+    -> Index lookup on ranked using <auto_key0> (decadeRank = 1)  (cost=0.35..3.5 rows=10)
+        -> Materialize CTE ranked  (cost=0..0 rows=0)
+            -> Window aggregate: row_number() OVER (PARTITION BY (b.startYear - (b.startYear % 10)) ORDER BY r.averageRating desc,r.numVotes desc,b.tconst ) 
+                -> Sort: decade, r.averageRating DESC, r.numVotes DESC, b.tconst
+                    -> Stream results  (cost=810905 rows=52006)
+                        -> Nested loop inner join  (cost=810905 rows=52006)
+                            -> Filter: (r.numVotes >= 25000)  (cost=177507 rows=577849)
+                                -> Covering index scan on r using idx_ratings_score_votes  (cost=177507 rows=1.73e+6)
+                            -> Filter: ((b.titleType = 'movie') and (b.startYear is not null))  (cost=0.996 rows=0.09)
+                                -> Single-row index lookup on b using PRIMARY (tconst = r.tconst)  (cost=0.996 rows=1)
+

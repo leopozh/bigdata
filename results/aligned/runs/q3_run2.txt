@@ -1,0 +1,110 @@
+--------------
+USE imdb
+--------------
+
+Query OK, 0 rows affected (0.001 sec)
+
+--------------
+-- Query 3: Longest Careers
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Same result as longest_careers() in mongo_queries.py:
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+--   people with a known birth and death year, using every principal credit
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+--   (any category, any title type) on titles with a known start year that
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+--   falls between the birth and death years (inclusive).
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+--   career span = last valid credit year - first valid credit year.
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- MongoDB's CAREER_MIN_SPAN shortcut is not needed here: this query computes
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- the span for every eligible person directly.
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+WITH eligible_people AS (
+    SELECT nconst, primaryName, birthYear, deathYear
+    FROM name_basics
+    WHERE birthYear IS NOT NULL
+      AND deathYear IS NOT NULL
+)
+-- NO_MERGE keeps eligible_people as a small in-memory table (about 249,000
+-- rows). Without it, MySQL looks up name_basics on disk once per credit
+-- (about 100 million lookups). The hint changes only the plan, not the result.
+SELECT /*+ NO_MERGE(n) */
+    n.nconst,
+    n.primaryName,
+    n.birthYear,
+    n.deathYear,
+    MIN(b.startYear)                    AS firstYear,
+    MAX(b.startYear)                    AS lastYear,
+    MAX(b.startYear) - MIN(b.startYear) AS careerSpan
+FROM title_principals p
+JOIN eligible_people n ON n.nconst = p.nconst
+JOIN title_basics b    ON b.tconst = p.tconst
+WHERE b.startYear IS NOT NULL
+  AND b.startYear BETWEEN n.birthYear AND n.deathYear   -- no credits before birth or after death
+GROUP BY n.nconst, n.primaryName, n.birthYear, n.deathYear
+-- MongoDB sorts by span only; nconst is added only to make ties deterministic.
+ORDER BY careerSpan DESC, n.nconst ASC
+LIMIT 20
+--------------
+
++-----------+-------------------+-----------+-----------+-----------+----------+------------+
+| nconst    | primaryName       | birthYear | deathYear | firstYear | lastYear | careerSpan |
++-----------+-------------------+-----------+-----------+-----------+----------+------------+
+| nm0045133 | Baby Peggy        |      1918 |      2020 |      1921 |     2020 |         99 |
+| nm0728958 | Maria Riva        |      1924 |      2025 |      1928 |     2023 |         95 |
+| nm0264660 | Nanette Fabray    |      1920 |      2018 |      1925 |     2018 |         93 |
+| nm0651704 | Marie Osborne     |      1911 |      2010 |      1915 |     2007 |         92 |
+| nm0002153 | Jack Cardiff      |      1914 |      2009 |      1918 |     2009 |         91 |
+| nm0782229 | Francia Seguy     |      1914 |      2013 |      1917 |     2007 |         90 |
+| nm0001013 | Harry Carey Jr.   |      1921 |      2012 |      1921 |     2010 |         89 |
+| nm0601077 | Michael D. Moore  |      1914 |      2013 |      1919 |     2008 |         89 |
+| nm0000926 | Milton Berle      |      1908 |      2002 |      1914 |     2002 |         88 |
+| nm0001682 | Mickey Rooney     |      1920 |      2014 |      1926 |     2014 |         88 |
+| nm0004931 | June Foray        |      1917 |      2017 |      1929 |     2017 |         88 |
+| nm0051218 | Balthus           |      1908 |      2001 |      1913 |     2001 |         88 |
+| nm0137638 | Mary Carlisle     |      1914 |      2018 |      1930 |     2018 |         88 |
+| nm0172237 | Cora Sue Collins  |      1927 |      2025 |      1932 |     2020 |         88 |
+| nm0547300 | Rose Marie        |      1923 |      2017 |      1929 |     2017 |         88 |
+| nm0571517 | Fay McKenzie      |      1918 |      2019 |      1918 |     2006 |         88 |
+| nm0788411 | Run Run Shaw      |      1907 |      2014 |      1926 |     2014 |         88 |
+| nm0373535 | Johannes Heesters |      1903 |      2011 |      1924 |     2011 |         87 |
+| nm0439018 | Oleg Karavaychuk  |      1927 |      2016 |      1929 |     2016 |         87 |
+| nm0454379 | King Harald V     |      1937 |      2026 |      1939 |     2026 |         87 |
++-----------+-------------------+-----------+-----------+-----------+----------+------------+
+20 rows in set (8 min 30.864 sec)
+
+Bye

@@ -12,3 +12,4 @@ __pycache__/
 # Benchmark outputs: only the final evidence is tracked.
 results/*
 !results/final/
+!results/aligned/

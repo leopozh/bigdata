@@ -1,0 +1,5 @@
+nm0001682  credits  879  unfiltered span 100  first 1926 last 2014 span 88  excluded years 8  categories 6 types 8
+nm0045133  credits   75  unfiltered span  99  first 1921 last 2020 span 99  excluded years 0  categories 4 types 6
+nm0454379  credits  127  unfiltered span  87  first 1939 last 2026 span 87  excluded years 0  categories 3 types 9
+nm0728958  credits   79  unfiltered span  95  first 1928 last 2023 span 95  excluded years 0  categories 3 types 6
+nm0782229  credits   26  unfiltered span  90  first 1917 last 2007 span 90  excluded years 0  categories 1 types 5

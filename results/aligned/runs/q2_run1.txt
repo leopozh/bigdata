@@ -1,0 +1,122 @@
+--------------
+USE imdb
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Query 2: Actors Who Died Before Their Best-Known Movie
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Same as died_before_best_known() in mongo_queries.py:
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+--   candidates  = movies in the person's IMDb knownForTitles list on which
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+--                 they have an actor/actress credit
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+--   best-known  = the candidate with the most votes
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+--   result      = deceased people whose best-known movie came out after
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+--                 their death year, most-voted first
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+WITH known_for AS (
+    -- knownForTitles is a comma-separated list; split it into one row per title.
+    SELECT n.nconst, n.primaryName, n.deathYear, k.tconst
+    FROM name_basics n
+    JOIN JSON_TABLE(
+        CONCAT('["', REPLACE(n.knownForTitles, ',', '","'), '"]'),
+        '$[*]' COLUMNS (tconst VARCHAR(12) PATH '$')
+    ) AS k
+    WHERE n.deathYear IS NOT NULL
+      AND n.knownForTitles IS NOT NULL
+),
+ranked AS (
+    SELECT
+        kf.nconst,
+        kf.primaryName,
+        kf.deathYear,
+        b.tconst,
+        b.primaryTitle,
+        b.startYear,
+        r.numVotes,
+        -- MongoDB sorts by votes (unrated movies last) and takes the first
+        -- movie per person; tconst is added only to make ties deterministic.
+        ROW_NUMBER() OVER (
+            PARTITION BY kf.nconst
+            ORDER BY r.numVotes DESC, b.tconst ASC
+        ) AS movieRank
+    FROM known_for kf
+    JOIN title_basics b ON b.tconst = kf.tconst
+    LEFT JOIN title_ratings r ON r.tconst = b.tconst   -- unrated movies stay eligible
+    WHERE b.titleType = 'movie'
+      AND EXISTS (
+          SELECT 1
+          FROM title_principals p
+          WHERE p.tconst = b.tconst
+            AND p.nconst = kf.nconst
+            AND p.category IN ('actor', 'actress')
+      )
+)
+SELECT nconst, primaryName, deathYear, tconst, primaryTitle, startYear, numVotes
+FROM ranked
+WHERE movieRank = 1                 -- best-known movie chosen first ...
+  AND startYear > deathYear         -- ... then checked for posthumous release
+ORDER BY numVotes DESC, nconst ASC
+LIMIT 20
+--------------
+
++-----------+--------------------+-----------+------------+---------------------------------+-----------+----------+
+| nconst    | primaryName        | deathYear | tconst     | primaryTitle                    | startYear | numVotes |
++-----------+--------------------+-----------+------------+---------------------------------+-----------+----------+
+| nm0001657 | Oliver Reed        |      1999 | tt0172495  | Gladiator                       |      2000 |  1896031 |
+| nm0240436 | Bee Duffell        |      1974 | tt0071853  | Monty Python and the Holy Grail |      1975 |   610548 |
+| nm0370747 | James Hayden       |      1983 | tt0087843  | Once Upon a Time in America     |      1984 |   414552 |
+| nm0076251 | Jason Bernard      |      1996 | tt0119528  | Liar Liar                       |      1997 |   369171 |
+| nm0000488 | Brandon Lee        |      1993 | tt0109506  | The Crow                        |      1994 |   235436 |
+| nm0001671 | Diana Rigg         |      2020 | tt9639470  | Last Night in Soho              |      2021 |   204029 |
+| nm0879381 | Sándor Técsy       |      2011 | tt1656190  | Safe                            |      2012 |   126508 |
+| nm3783307 | Angus Cloud        |      2023 | tt27489557 | Abigail                         |      2024 |   125926 |
+| nm0002768 | Blanche Friderici  |      1933 | tt0025316  | It Happened One Night           |      1934 |   121121 |
+| nm7087538 | Hudson Meek        |      2024 | tt27165187 | The End of Oak Street           |      2026 |   108618 |
+| nm0277344 | Dennis Fimple      |      2002 | tt0251736  | House of 1000 Corpses           |      2003 |   102301 |
+| nm0447782 | Alexa Kenin        |      1985 | tt0091790  | Pretty in Pink                  |      1986 |    96936 |
+| nm0634313 | Lloyd Nolan        |      1985 | tt0091167  | Hannah and Her Sisters          |      1986 |    82546 |
+| nm0447576 | Cavan Kendall      |      1999 | tt0203119  | Sexy Beast                      |      2000 |    77707 |
+| nm0283499 | Joe Flynn          |      1974 | tt0076618  | The Rescuers                    |      1977 |    76608 |
+| nm0482273 | Predrag Lakovic    |      1997 | tt0118843  | Black Cat, White Cat            |      1998 |    59485 |
+| nm5665379 | Viktoria Korotkova |      2011 | tt31728330 | They Will Kill You              |      2026 |    57328 |
+| nm0791248 | Adrienne Shelly    |      2006 | tt0473308  | Waitress                        |      2007 |    51684 |
+| nm0607558 | Vic Morrow         |      1982 | tt0086491  | Twilight Zone: The Movie        |      1983 |    44207 |
+| nm0001944 | Edgar Bergen       |      1978 | tt0079588  | The Muppet Movie                |      1979 |    43417 |
++-----------+--------------------+-----------+------------+---------------------------------+-----------+----------+
+20 rows in set (1 min 2.061 sec)
+
+Bye

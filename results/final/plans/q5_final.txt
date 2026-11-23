@@ -1,0 +1,31 @@
+-> Limit: 20 row(s)
+    -> Sort: starScore DESC, b.tconst, limit input to 20 row(s) per chunk
+        -> Table scan on <temporary>
+            -> Aggregate using temporary table
+                -> Nested loop left join  (cost=234e+9 rows=0)
+                    -> Nested loop inner join  (cost=234e+9 rows=2.34e+12)
+                        -> Nested loop inner join  (cost=2.08e+6 rows=173372)
+                            -> Table scan on r  (cost=177507 rows=1.73e+6)
+                            -> Filter: (b.titleType = 'movie')  (cost=0.999 rows=0.1)
+                                -> Single-row index lookup on b using PRIMARY (tconst = r.tconst)  (cost=0.999 rows=1)
+                        -> Index lookup on pt using <auto_key0> (tconst = r.tconst)  (cost=11.4e+6..11.4e+6 rows=15)
+                            -> Materialize CTE person_title if needed  (cost=11.4e+6..11.4e+6 rows=13.5e+6)
+                                -> Table scan on <temporary>  (cost=8.08e+6..8.25e+6 rows=13.5e+6)
+                                    -> Temporary table with deduplication  (cost=8.08e+6..8.08e+6 rows=13.5e+6)
+                                        -> Nested loop inner join  (cost=4.97e+6 rows=13.5e+6)
+                                            -> Nested loop inner join  (cost=1.89e+6 rows=1.56e+6)
+                                                -> Filter: (r.numVotes is not null)  (cost=177507 rows=1.56e+6)
+                                                    -> Table scan on r  (cost=177507 rows=1.73e+6)
+                                                -> Single-row covering index lookup on b using PRIMARY (tconst = r.tconst)  (cost=0.999 rows=1)
+                                            -> Filter: (p.nconst is not null)  (cost=1.01 rows=8.66)
+                                                -> Index lookup on p using PRIMARY (tconst = r.tconst)  (cost=1.01 rows=9.62)
+                    -> Index lookup on f using <auto_key0> (nconst = pt.nconst)  (cost=0.25..2.5 rows=10)
+                        -> Materialize CTE fame  (cost=0..0 rows=0)
+                            -> Table scan on <temporary>
+                                -> Aggregate using temporary table
+                                    -> Nested loop inner join  (cost=15.9e+6 rows=13.5e+6)
+                                        -> Filter: (pt.nconst is not null)  (cost=1.52e+6 rows=13.5e+6)
+                                            -> Table scan on pt  (cost=11.4e+6..11.5e+6 rows=13.5e+6)
+                                                -> Materialize CTE person_title if needed (query plan printed elsewhere)  (cost=11.4e+6..11.4e+6 rows=13.5e+6)
+                                        -> Single-row covering index lookup on n using PRIMARY (nconst = pt.nconst)  (cost=0.967 rows=1)
+

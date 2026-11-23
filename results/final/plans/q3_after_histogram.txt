@@ -1,0 +1,16 @@
+-> Limit: 20 row(s)
+    -> Sort: careerSpan DESC, movieCount DESC, n.nconst
+        -> Filter: (count(distinct title_basics.tconst) >= 2)
+            -> Stream results
+                -> Group aggregate: count(distinct title_basics.tconst), min(title_basics.startYear), max(title_basics.startYear), min(title_basics.startYear), max(title_basics.startYear), count(distinct title_basics.tconst)
+                    -> Sort: n.nconst, n.primaryName, n.birthYear, n.deathYear
+                        -> Stream results  (cost=2.69e+6 rows=34849)
+                            -> Nested loop inner join  (cost=2.69e+6 rows=34849)
+                                -> Nested loop inner join  (cost=1.93e+6 rows=696979)
+                                    -> Filter: ((b.titleType = 'movie') and (b.startYear is not null) and (b.startYear <= <cache>(year(curdate()))))  (cost=1.22e+6 rows=362348)
+                                        -> Table scan on b  (cost=1.22e+6 rows=12.1e+6)
+                                    -> Filter: ((p.category in ('actor','actress')) and (p.nconst is not null))  (cost=1.01 rows=1.92)
+                                        -> Index lookup on p using PRIMARY (tconst = b.tconst)  (cost=1.01 rows=9.62)
+                                -> Filter: ((n.deathYear is not null) and (n.birthYear is not null) and (b.startYear >= n.birthYear) and (b.startYear <= n.deathYear))  (cost=0.983 rows=0.05)
+                                    -> Single-row index lookup on n using PRIMARY (nconst = p.nconst)  (cost=0.983 rows=1)
+

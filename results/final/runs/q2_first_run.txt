@@ -1,0 +1,100 @@
+--------------
+USE imdb
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Query 2: Actors Who Died Before Their Best-Known Movie
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- For each deceased actor/actress, pick their best-known credited movie
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- (highest rating, then most votes, then lowest tconst) across ALL eligible
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- movies, and only then keep those whose pick was released after they died.
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+WITH ranked_credits AS (
+    SELECT
+        p.nconst,
+        b.tconst,
+        b.primaryTitle,
+        b.startYear,
+        r.averageRating,
+        r.numVotes,
+        -- Rank every eligible movie per actor; duplicate credits on the same
+        -- movie share a tconst, so whichever copy gets rank 1 is the same movie.
+        ROW_NUMBER() OVER (
+            PARTITION BY p.nconst
+            ORDER BY r.averageRating DESC, r.numVotes DESC, b.tconst ASC
+        ) AS movieRank
+    FROM title_principals p
+    JOIN name_basics n   ON n.nconst = p.nconst
+    JOIN title_basics b  ON b.tconst = p.tconst
+    JOIN title_ratings r ON r.tconst = p.tconst
+    WHERE p.category IN ('actor', 'actress')
+      AND n.deathYear IS NOT NULL
+      AND b.titleType = 'movie'
+      AND b.startYear IS NOT NULL
+      AND r.averageRating IS NOT NULL
+      AND r.numVotes IS NOT NULL
+)
+SELECT
+    n.nconst,
+    n.primaryName,
+    n.deathYear,
+    rc.tconst,
+    rc.primaryTitle,
+    rc.startYear,
+    rc.averageRating,
+    rc.numVotes
+FROM ranked_credits rc
+JOIN name_basics n ON n.nconst = rc.nconst
+WHERE rc.movieRank = 1               -- best-known movie chosen first ...
+  AND rc.startYear > n.deathYear     -- ... then checked for posthumous release
+ORDER BY rc.averageRating DESC, rc.numVotes DESC, n.nconst ASC
+LIMIT 20
+--------------
+
++------------+-----------------------+-----------+------------+-------------------------------------------------------+-----------+---------------+----------+
+| nconst     | primaryName           | deathYear | tconst     | primaryTitle                                          | startYear | averageRating | numVotes |
++------------+-----------------------+-----------+------------+-------------------------------------------------------+-----------+---------------+----------+
+| nm0119364  | Jimmy Buffett         |      2023 | tt38501669 | Bankie Banx: King of the Dune                         |      2024 |           9.8 |       38 |
+| nm0893449  | Nedumudi Venu         |      2021 | tt12020892 | Orangu Marangalude Veedu                              |      2026 |           9.7 |      126 |
+| nm1548005  | P. Balachandran       |      2021 | tt12020892 | Orangu Marangalude Veedu                              |      2026 |           9.7 |      126 |
+| nm0454627  | David King            |      1998 | tt27618792 | Bad Things Happen in Philadelphia                     |      2023 |           9.6 |       13 |
+| nm0154164  | Soumitra Chatterjee   |      2020 | tt16915406 | Ami Soumitra                                          |      2022 |           9.6 |       10 |
+| nm0004366  | Tom Wolfe             |      2018 | tt16245226 | Forever Endeavor                                      |      2024 |           9.5 |       19 |
+| nm0651737  | Robert Osborne        |      2017 | tt16245226 | Forever Endeavor                                      |      2024 |           9.5 |       19 |
+| nm0878990  | Will Tynan            |      2016 | tt4643336  | Red Dog & Bates                                       |      2023 |           9.5 |       19 |
+| nm4978225  | Bradley Welsh         |      2019 | tt2331199  | The Boxer from Somewhere Else: The Ken Buchanan Story |      2025 |           9.5 |       15 |
+| nm1563842  | Bala Singh            |      2019 | tt32986244 | Thaainilam                                            |      2024 |           9.4 |     1023 |
+| nm6160527  | Rockline Sudhakar     |      2020 | tt25814516 | Mareyade Kshamisu                                     |      2023 |           9.4 |      170 |
+| nm0707947  | Ramakrishna           |      2001 | tt25815968 | Smarami                                               |      2023 |           9.4 |       32 |
+| nm3272130  | Ashwini Ekbote        |      2016 | tt15680724 | Kadhi Ambat Kadhi Goad                                |      2021 |           9.4 |        7 |
+| nm4470570  | Ramchandra Dhumal     |      2020 | tt14552832 | Lagan                                                 |      2022 |           9.3 |      100 |
+| nm9322849  | Tnr                   |      2021 | tt21603638 | The World of Kapata                                   |      2022 |           9.3 |       84 |
+| nm2665952  | Robby Sugara          |      2019 | tt11828456 | Molulo 2: Jodohku yang Mana?                          |      2022 |           9.3 |       82 |
+| nm0442479  | Satish Kaushik        |      2023 | tt21969914 | Tez Raftaaar                                          |      2025 |           9.3 |       41 |
+| nm6481337  | Vira Sathidar         |      2021 | tt19719146 | Palyad                                                |      2022 |           9.3 |       31 |
+| nm13351033 | Bienvenido Pantaleón  |      2023 | tt20882494 | El Fotógrafo de la 40                                 |      2024 |           9.3 |        9 |
+| nm2897413  | Dharshan Dharmaraj    |      2022 | tt10958258 | Marine Drive                                          |      2024 |           9.2 |       57 |
++------------+-----------------------+-----------+------------+-------------------------------------------------------+-----------+---------------+----------+
+20 rows in set (6 min 15.808 sec)
+
+Bye

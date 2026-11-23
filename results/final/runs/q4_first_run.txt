@@ -1,0 +1,65 @@
+--------------
+USE imdb
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Query 4: Biggest Casts of Characters
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Movies with the most principal credits, counted as rows in title_principals
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- (not names parsed from the characters field).
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+SELECT
+    b.tconst,
+    b.primaryTitle,
+    b.startYear,
+    COUNT(*) AS principalCount
+FROM title_basics b
+JOIN title_principals p ON p.tconst = b.tconst
+WHERE b.titleType = 'movie'
+GROUP BY b.tconst, b.primaryTitle, b.startYear
+ORDER BY principalCount DESC, b.tconst ASC
+LIMIT 20
+--------------
+
++------------+----------------------------------------------------------------+-----------+----------------+
+| tconst     | primaryTitle                                                   | startYear | principalCount |
++------------+----------------------------------------------------------------+-----------+----------------+
+| tt0249991  | The Story of Christmas                                         |      1994 |             56 |
+| tt8108230  | Pokémon the Movie: The Power of Us                             |      2018 |             56 |
+| tt1319695  | 31 Minutes: The Movie                                          |      2008 |             53 |
+| tt1371111  | Cloud Atlas                                                    |      2012 |             52 |
+| tt22640398 | V/H/S/85                                                       |      2023 |             50 |
+| tt14308142 | The Transformations of the Transformations of the Drs. Jenkins |      2021 |             49 |
+| tt8456656  | Happy Horror Days                                              |      2020 |             49 |
+| tt11819890 | Pokémon the Movie: Secrets of the Jungle                       |      2020 |             48 |
+| tt13952306 | Katak: The Brave Beluga                                        |      2023 |             48 |
+| tt14260876 | Heidi: Rescue of the Lynx                                      |      2025 |             48 |
+| tt3804810  | Even Mice Belong in Heaven                                     |      2021 |             48 |
+| tt13398178 | The Amazing Adventures of Joe 90                               |      1981 |             47 |
+| tt12894288 | The Ezzera & Gore-Girl Horror Anthology                        |      2023 |             46 |
+| tt7528004  | Tales from the Narrow Bridge: The Wyrmwood Devil               |      NULL |             46 |
+| tt1468843  | Pokémon: Arceus and the Jewel of Life                          |      2009 |             45 |
+| tt3411432  | All Creatures Big And Small                                    |      2015 |             45 |
+| tt0044025  | The Seven Deadly Sins                                          |      1952 |             44 |
+| tt1000095  | Pokémon Ranger and the Temple of the Sea                       |      2006 |             44 |
+| tt15574500 | Vortex: A Film Anthology                                       |      2022 |             44 |
+| tt3534078  | The Three Musketeers                                           |      2008 |             44 |
++------------+----------------------------------------------------------------+-----------+----------------+
+20 rows in set (31.951 sec)
+
+Bye

@@ -1,0 +1,99 @@
+--------------
+USE imdb
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Query 5: Most Star-Studded Cast and Crew
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Mirrors star_studded() in mongo_queries.py:
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+--   fame(person)    = SUM(numVotes) over every rated title (any type) they are credited on
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+--   starScore(movie) = SUM(fame(person) - numVotes(movie)) over distinct people on the movie
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+WITH person_title AS (
+    -- One row per (rated title, person), so people credited in several
+    -- categories on the same title are counted once (Mongo: $setUnion).
+    -- Only rated titles present in title_basics are kept, as in the Mongo
+    -- titles collection; this also keeps the deduplicated set small.
+    SELECT DISTINCT p.tconst, p.nconst, r.numVotes
+    FROM title_principals p
+    JOIN title_ratings r ON r.tconst = p.tconst
+    JOIN title_basics b  ON b.tconst = p.tconst
+    WHERE p.nconst IS NOT NULL
+      AND r.numVotes IS NOT NULL
+),
+fame AS (
+    -- SUM over INT returns DECIMAL in MySQL, so large totals do not overflow.
+    -- Only people in name_basics get a fame value ($merge into the Mongo
+    -- people collection discards unknown people).
+    SELECT pt.nconst, SUM(pt.numVotes) AS fame
+    FROM person_title pt
+    JOIN name_basics n ON n.nconst = pt.nconst
+    GROUP BY pt.nconst
+)
+SELECT
+    b.tconst,
+    b.primaryTitle,
+    b.startYear,
+    r.averageRating,
+    r.numVotes,
+    COUNT(*)                   AS creditedPeople,
+    -- People without a fame row contribute NULL, which SUM ignores
+    -- (same as Mongo's $sum over a missing $lookup result).
+    SUM(f.fame - r.numVotes)   AS starScore
+FROM title_basics b
+JOIN title_ratings r ON r.tconst = b.tconst
+JOIN person_title pt ON pt.tconst = b.tconst
+LEFT JOIN fame f     ON f.nconst = pt.nconst
+WHERE b.titleType = 'movie'
+GROUP BY b.tconst, b.primaryTitle, b.startYear, r.averageRating, r.numVotes
+ORDER BY starScore DESC, b.tconst ASC
+LIMIT 20
+--------------
+
++------------+--------------------------------------------+-----------+---------------+----------+----------------+-----------+
+| tconst     | primaryTitle                               | startYear | averageRating | numVotes | creditedPeople | starScore |
++------------+--------------------------------------------+-----------+---------------+----------+----------------+-----------+
+| tt0372784  | Batman Begins                              |      2005 |           8.2 |  1755600 |             23 | 314240153 |
+| tt1345836  | The Dark Knight Rises                      |      2012 |           8.4 |  2039951 |             23 | 302800859 |
+| tt2395427  | Avengers: Age of Ultron                    |      2015 |           7.3 |  1031834 |             22 | 296509851 |
+| tt0468569  | The Dark Knight                            |      2008 |           9.1 |  3252881 |             22 | 285523509 |
+| tt4154796  | Avengers: Endgame                          |      2019 |           8.4 |  1510596 |             23 | 283568796 |
+| tt4154756  | Avengers: Infinity War                     |      2018 |           8.4 |  1426031 |             23 | 281492406 |
+| tt1228705  | Iron Man 2                                 |      2010 |           6.9 |   965352 |             23 | 256098665 |
+| tt3498820  | Captain America: Civil War                 |      2016 |           7.8 |   958270 |             23 | 244266487 |
+| tt0848228  | The Avengers                               |      2012 |           8.0 |  1593426 |             20 | 234533122 |
+| tt0458339  | Captain America: The First Avenger         |      2011 |           6.9 |   995572 |             24 | 234091646 |
+| tt1843866  | Captain America: The Winter Soldier        |      2014 |           7.7 |   997555 |             23 | 225740748 |
+| tt10872600 | Spider-Man: No Way Home                    |      2021 |           8.1 |  1090070 |             23 | 221344298 |
+| tt6320628  | Spider-Man: Far from Home                  |      2019 |           7.3 |   685607 |             23 | 217141412 |
+| tt10648342 | Thor: Love and Thunder                     |      2022 |           6.1 |   480647 |             24 | 216001199 |
+| tt22084616 | Spider-Man: Brand New Day                  |      2026 |           7.9 |   391978 |             26 | 211916778 |
+| tt1300854  | Iron Man 3                                 |      2013 |           7.1 |   991423 |             21 | 208710269 |
+| tt3501632  | Thor: Ragnarok                             |      2017 |           7.9 |   921540 |             23 | 208307951 |
+| tt2488496  | Star Wars: Episode VII - The Force Awakens |      2015 |           7.7 |  1039597 |             25 | 206694607 |
+| tt2527336  | Star Wars: Episode VIII - The Last Jedi    |      2017 |           6.8 |   730852 |             20 | 203971115 |
+| tt0118607  | Amistad                                    |      1997 |           7.3 |    89152 |             22 | 203142407 |
++------------+--------------------------------------------+-----------+---------------+----------+----------------+-----------+
+20 rows in set (1 hour 4 min 42.295 sec)
+
+Bye

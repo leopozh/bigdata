@@ -1,0 +1,8 @@
+--------------
+CREATE INDEX idx_principals_nconst ON title_principals(nconst) ALGORITHM=INPLACE LOCK=NONE
+--------------
+
+Query OK, 0 rows affected (3 min 17.095 sec)
+Records: 0  Duplicates: 0  Warnings: 0
+
+Bye

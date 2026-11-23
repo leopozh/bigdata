@@ -1,0 +1,11 @@
+nm0001657  Oliver Reed          died 1999  candidates 4 best ('tt0172495', '2000', 1896031) -> POSTHUMOUS
+nm0240436  Bee Duffell          died 1974  candidates 2 best ('tt0071853', '1975', 610548) -> POSTHUMOUS
+nm0001671  Diana Rigg           died 2020  candidates 2 best ('tt9639470', '2021', 204029) -> POSTHUMOUS
+nm3783307  Angus Cloud          died 2023  candidates 2 best ('tt27489557', '2024', 125926) -> POSTHUMOUS
+nm7087538  Hudson Meek          died 2024  candidates 1 best ('tt27165187', '2026', 108618) -> POSTHUMOUS
+nm5665379  Viktoria Korotkova   died 2011  candidates 3 best ('tt31728330', '2026', 57328) -> POSTHUMOUS
+nm0607558  Vic Morrow           died 1982  candidates 3 best ('tt0086491', '1983', 44207) -> POSTHUMOUS
+nm0001944  Edgar Bergen         died 1978  candidates 4 best ('tt0079588', '1979', 43417) -> POSTHUMOUS
+nm0005132  Heath Ledger         died 2008  candidates 4 best ('tt0468569', '2008', 3252881) -> excluded
+nm0908094  Paul Walker          died 2013  candidates 4 best ('tt0232500', '2001', 470165) -> excluded
+nm0000015  James Dean           died 1955  candidates 3 best ('tt0048545', '1955', 104789) -> excluded

@@ -1,0 +1,76 @@
+--------------
+USE imdb
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Query 1: Best Movie of Each Decade
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Same as best_per_decade() in mongo_queries.py: among movies with at least
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- 25,000 votes and a known release year, the highest-rated movie of each
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- decade (ties: more votes first). One row per decade, oldest decade first.
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+WITH ranked AS (
+    SELECT
+        b.tconst,
+        b.primaryTitle,
+        b.startYear,
+        b.startYear - MOD(b.startYear, 10) AS decade,
+        r.averageRating,
+        r.numVotes,
+        -- MongoDB sorts by rating, then votes, and takes the first movie per
+        -- decade; tconst is added only to make exact ties deterministic.
+        ROW_NUMBER() OVER (
+            PARTITION BY b.startYear - MOD(b.startYear, 10)
+            ORDER BY r.averageRating DESC, r.numVotes DESC, b.tconst ASC
+        ) AS decadeRank
+    FROM title_basics b
+    JOIN title_ratings r ON r.tconst = b.tconst
+    WHERE b.titleType = 'movie'
+      AND b.startYear IS NOT NULL
+      AND r.numVotes >= 25000
+)
+SELECT decade, tconst, primaryTitle, startYear, averageRating, numVotes
+FROM ranked
+WHERE decadeRank = 1
+ORDER BY decade
+--------------
+
++--------+------------+------------------------------------------------+-----------+---------------+----------+
+| decade | tconst     | primaryTitle                                   | startYear | averageRating | numVotes |
++--------+------------+------------------------------------------------+-----------+---------------+----------+
+|   1910 | tt0004972  | The Birth of a Nation                          |      1915 |           6.0 |    28714 |
+|   1920 | tt0019760  | Man with a Movie Camera                        |      1929 |           8.3 |    30956 |
+|   1930 | tt0027977  | Modern Times                                   |      1936 |           8.5 |   289342 |
+|   1940 | tt0038650  | It's a Wonderful Life                          |      1946 |           8.6 |   563812 |
+|   1950 | tt0050083  | 12 Angry Men                                   |      1957 |           9.0 |  1012984 |
+|   1960 | tt0060196  | The Good, the Bad and the Ugly                 |      1966 |           8.8 |   907380 |
+|   1970 | tt0068646  | The Godfather                                  |      1972 |           9.2 |  2273841 |
+|   1980 | tt0080684  | Star Wars: Episode V - The Empire Strikes Back |      1980 |           8.7 |  1534240 |
+|   1990 | tt0111161  | The Shawshank Redemption                       |      1994 |           9.3 |  3267148 |
+|   2000 | tt0468569  | The Dark Knight                                |      2008 |           9.1 |  3252881 |
+|   2010 | tt1375666  | Inception                                      |      2010 |           8.8 |  2891836 |
+|   2020 | tt45368240 | You Can See Everything                         |      2026 |           9.0 |    40300 |
++--------+------------+------------------------------------------------+-----------+---------------+----------+
+12 rows in set (0.255 sec)
+
+Bye

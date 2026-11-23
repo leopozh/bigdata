@@ -22,37 +22,44 @@ The schema is in `data/mysql/schema.sql`. Each IMDb file becomes one table, keye
 
 ## SQL Queries
 
-The five queries are the ones agreed on by the group. They are in `data/mysql/query1.sql` through `query5.sql`. Every query ends with a final tiebreaker on the identifier (`tconst` or `nconst`), so the top 20 is deterministic.
+The five queries are in `data/mysql/query1.sql` through `query5.sql`. They answer the same questions as the MongoDB pipelines in `mongo_queries.py`, using the same eligibility rules, ranking and calculations, so the two databases can be compared directly. Where MongoDB leaves the order of exact ties unspecified, the SQL adds a final tiebreaker on the identifier (`tconst` or `nconst`); the checks below show where this can and cannot affect the results.
 
-### Query 1: Best Movie of the Decade
+An earlier version of Queries 1–3 used stricter definitions (2020s only, highest-rated credit, acting credits on movies only). They were changed to match the MongoDB implementation; the earlier versions and their benchmarks remain in Git history and in `results/final/`.
 
-Highest-rated movies (`titleType = 'movie'`) released in the decade with at least 25,000 votes, ranked by rating, then votes, then `tconst`.
+### Query 1: Best Movie of Each Decade
 
-- The decade is set by `@decade_start` (currently 2020). The upper bound is `LEAST(@decade_start + 9, YEAR(CURDATE()))`, which excludes future release years.
-- Result: 1,219 movies qualify; the top 20 is returned. The top result is *You Can See Everything* (2026, 9.0, 40,300 votes).
+MongoDB: `best_per_decade()`. Among movies (`titleType = 'movie'`) with a known release year and at least 25,000 votes, the highest-rated movie of each decade, with more votes winning a rating tie. One row per decade, oldest first.
+
+- The decade is `startYear - MOD(startYear, 10)`, like MongoDB's `$subtract`/`$mod`.
+- `ROW_NUMBER()` per decade ordered by rating, then votes, then `tconst` replaces MongoDB's `$sort` + `$group`/`$first`.
+- Result: 12 decades (1910s–2020s), from *The Birth of a Nation* (1915) to *You Can See Everything* (2026). Every decade has a single winner on rating and votes, so the `tconst` tiebreaker never decides.
 
 ### Query 2: Actors Who Died Before Their Best-Known Movie
 
-Actors and actresses whose best-known credited movie was released after the year they died.
+MongoDB: `died_before_best_known()`. For each person with a death year, the candidates are the movies in their IMDb `knownForTitles` list on which they have an `actor` or `actress` credit. The best-known movie is the candidate with the most votes. The query returns people whose best-known movie was released after their death year, most-voted first.
 
-- Eligible credits: `title_principals` rows with category `actor` or `actress`, on movies with a release year and a rating, for people with a known `deathYear`.
-- A CTE ranks every eligible movie per person with `ROW_NUMBER()` (rating, then votes, then `tconst`). The best-known movie is chosen first (`movieRank = 1`) and only then checked for `startYear > deathYear`. This means an actor whose best movie came out while they were alive is excluded, even if they have other posthumous releases. For example, Heath Ledger is excluded: his best-known movie, *The Dark Knight* (2008), was released in the year he died, not after it.
-- There is no minimum vote count, so the results are mostly little-known movies with few votes and high ratings. This follows the agreed definition.
+- `knownForTitles` is a comma-separated list, so it is split into rows with `JSON_TABLE` (MongoDB stores it as the `knownFor` array).
+- The acting-credit check is an `EXISTS` subquery on `title_principals`, like MongoDB's `$anyElementTrue` over the embedded principals.
+- Ratings are optional (`LEFT JOIN title_ratings`). Unrated candidates sort last, as missing values do in MongoDB's descending sort. Movies without a release year can be chosen but never pass `startYear > deathYear`.
+- The best-known movie is chosen first (`movieRank = 1`) and only then checked for a posthumous release. For example, Heath Ledger is excluded because his most-voted known-for movie, *The Dark Knight* (2008), came out in the year he died.
+- Result: top result is Oliver Reed (died 1999), *Gladiator* (2000, 1,896,031 votes).
 
-### Query 3: Longest Careers of Deceased Actors
+### Query 3: Longest Careers
 
-Longest acting careers, measured as last valid movie credit year minus first valid movie credit year.
+MongoDB: `longest_careers()`. People with a known birth and death year; every principal credit counts (any category and any title type) if the title's start year is known and between the birth and death years (inclusive). The career span is the last valid year minus the first valid year.
 
-- Requires `deathYear IS NOT NULL` and `birthYear IS NOT NULL`, so living actors are never included.
-- Only `actor`/`actress` credits on movies count, and a credit is valid only if its release year is known, is between the birth year and the death year (inclusive), and is not in the future. These filters run before grouping, so `MIN` and `MAX` only see valid years.
-- Requires at least two distinct movies. Ranked by career span, then movie count, then `nconst`.
-- Top result: Francia Seguy (1914–2013), 87 years from 1917 to 2004 across 6 movies.
+- The eligible people (about 249,000) are put in a CTE that the `NO_MERGE` hint keeps as an in-memory temporary table, so each of the roughly 100 million credits is checked with an in-memory lookup instead of a disk read. The hint changes only the plan.
+- MongoDB first drops people whose unfiltered span is below `CAREER_MIN_SPAN = 60` as a speed-up. The SQL computes every eligible person's span directly, so it does not need that shortcut. The 20th span is 87, above 60, so the shortcut cannot have changed MongoDB's result.
+- There is no separate future-year filter: as in MongoDB, credits are limited by the death year.
+- No minimum number of credits is required (MongoDB has none); every top-20 span is at least 87 years, so each of those people has credits in at least two different years.
+- Note: the docstring of `longest_careers()` says "credits of movies", but the pipeline does not filter by title type. The SQL follows the pipeline (all title types).
+- Result: top result is Baby Peggy (1918–2020), 99 years from 1921 to 2020.
 
 ### Query 4: Biggest Casts of Characters
 
-Movies with the most principal credits, counted as `COUNT(*)` over their `title_principals` rows (not names parsed from the `characters` field).
+MongoDB: `biggest_casts()`. Movies with the most principal credits, counted as `COUNT(*)` over their `title_principals` rows (not names parsed from the `characters` field). This equals MongoDB's `$size` of the embedded `principals` array, which has one entry per `title_principals` row.
 
-- Ranked by principal count, then `tconst`. Movies without a release year are kept (one appears in the top 20).
+- Ranked by principal count, then `tconst` (MongoDB: count, then `_id`). Movies without a release year are kept (one appears in the top 20).
 - Top results: *The Story of Christmas* (1994) and *Pokémon the Movie: The Power of Us* (2018), with 56 principal credits each.
 
 ### Query 5: Most Star-Studded Cast and Crew
@@ -68,6 +75,7 @@ Implementation details:
 - The `fame` CTE is grouped to one row per person before it is joined back, so vote counts are not multiplied by duplicate joins. `SUM` over `INT` returns `DECIMAL` in MySQL, so large totals do not overflow.
 - People missing from `name_basics` get no fame value. They are still counted as credited people but add nothing to the score (`SUM` ignores `NULL`), which matches the MongoDB `$merge`/`$lookup` behavior.
 - All principal categories are included, and only rated movies are ranked.
+- MongoDB sorts by score only; the SQL adds `tconst` as a tiebreaker. The top 20 scores are all different, so this does not change the result. One edge case differs: a movie where nobody has a fame value scores `NULL` in SQL and `0` in MongoDB, which cannot reach the top 20.
 - Top result: *Batman Begins* (2005), 23 credited people, star score 314,240,153.
 
 ## Verification
@@ -76,9 +84,9 @@ Each query was run against the full database, and its results were checked indep
 
 | Query | Check |
 |---|---|
-| Q1 | All returned movies are in 2020–2026 with ≥ 25,000 votes. A separate count found exactly 19 eligible movies ranked above the 20th. No rated movies from 2027 or later exist. |
-| Q2 | For all 20 actors, every eligible credit was exported and the best-known movie was recomputed in Python. All 20 picks match and are posthumous. Heath Ledger was used as a control and is correctly excluded. |
-| Q3 | All 20 actors have a death year. For 5 actors, all acting movie credits were recomputed without filters in Python. Spans and counts match, and the filters visibly removed a credit after death (Mickey Rooney) and credits before birth (Ashalata Wabgaonkar). |
+| Q1 | Each decade's winner was recomputed with `GROUP BY`/`MAX` instead of a window function; all 12 match. No decade has two movies tied on both rating and votes. |
+| Q2 | For 8 returned people and 3 controls (Heath Ledger, Paul Walker, James Dean), `knownForTitles` was split in Python and each title looked up directly; all picks and exclusions match. Only 187 people have a vote tie on their pick, and none at the top-20 vote level (≥ 43,417 votes), so the top 20 does not depend on tie order. |
+| Q3 | For 5 returned people, all raw credits (up to 6 categories and 9 title types per person) were recomputed in Python with MongoDB's rules; first year, last year and span match. The birth/death filter is active (8 of Mickey Rooney's credit years are excluded). Exactly 3 people have span 87 (the 20th place) and 17 have more, so the set of 20 people does not depend on tie order. |
 | Q4 | Counts match a direct `COUNT(*)` on `title_principals`. A second formulation (aggregate first, then filter movies) gave the same ranking, including a 7-way tie at 44 credits broken by `tconst`. |
 | Q5 | The formula was recomputed in Python from raw credit rows. *Primer* (17 credit rows, 10 people, one person credited 8 times) gives 309,875 in both Python and SQL. *Batman Begins* (25 credit rows, 23 people) gives 314,240,153 in both. |
 
@@ -94,7 +102,7 @@ The final secondary indexes and statistics are in `data/mysql/indexes.sql`:
 
 | Object | Columns | Status | Notes |
 |---|---|---|---|
-| `idx_ratings_score_votes` | `title_ratings(averageRating, numVotes)` | **Invisible** | Kept but hidden from the optimizer, because it made Q2 3.9x slower (see below) |
+| `idx_ratings_score_votes` | `title_ratings(averageRating, numVotes)` | **Invisible** | Kept but hidden from the optimizer, because it made the earlier Q2 3.9x slower (see below); for the current queries it would only be used by Q1 and Q5 |
 | `idx_episode_parent` | `title_episode(parentTconst)` | Visible | Kept from the earlier phase; none of the five queries use it |
 | Histogram on `name_basics.deathYear` | 100 buckets | Active | Statistics only, not an index; improves row estimates for Q2 and Q3 |
 
@@ -108,7 +116,34 @@ All other lookups use the primary keys. `title_principals` is clustered on (`tco
 - Times are wall-clock times reported by the `mysql` client.
 - Limitation: an invisible index is ignored by the optimizer but still exists and is still maintained. The comparison shows the plan MySQL would choose without the index, but it does not recreate the original database (buffer pool, OS file cache and statistics are as they are at that moment).
 
-### Controlled results: `idx_ratings_score_votes`
+### Final query runtimes
+
+Measured with the final configuration (`idx_ratings_score_votes` invisible). Evidence: `results/aligned/` (Q1–Q3) and `results/final/` (Q4, Q5).
+
+| Query | Runs | Median | Main cost (from `EXPLAIN` / `EXPLAIN ANALYZE`) |
+|---|---|---:|---|
+| Q1 | 1.008 s, 0.248 s, 0.260 s (plus a first cold run of 1.338 s) | 0.26 s | Scan of `title_ratings`, primary-key lookups into `title_basics` |
+| Q2 | 62.1 s, 51.3 s, 64.6 s | 62.1 s | Measured: `name_basics` scan 3.5 s; about 806,000 `title_basics`, 498,000 `title_ratings` and 498,000 `title_principals` primary-key lookups take about 53 s |
+| Q3 | 218.3 s, 510.9 s, 268.3 s | 268.3 s | Reads essentially all of `title_principals` and `title_basics` (about 591,000 page reads, roughly 9 GB, in the third run) |
+| Q4 | 32.0 s (one run) | — | `title_basics` scan, covering primary-key lookups into `title_principals` |
+| Q5 | **Not measured** in the final configuration | — | One earlier run with the ratings index visible: 1 h 4 min 42 s (see below) |
+
+- Results were identical in every run of each query.
+- Q3's runs vary widely (218–511 s). It reads about 9 GB through a 128 MB buffer pool, so its time depends on how much of the data the operating system has cached and on other load on the machine.
+- Q4's plan does not involve `idx_ratings_score_votes`, so its earlier timing applies to the final configuration.
+
+Index decisions for the current queries:
+
+- Q1 with `idx_ratings_score_votes` visible: 0.255 s, 0.237 s, 0.236 s (median 0.237 s), about 0.02 s faster. The index stays invisible because of the earlier Q2 result and because its effect on Q5 is unknown.
+- Q2: about 92% of the measured time is primary-key lookups. An index on `name_basics(deathYear)` could only remove the 3.5 s scan (about 6%), so none was added.
+- Q3 has to read every credit of every eligible person, so no index can reduce the amount of data read. The `NO_MERGE` hint was used instead (see Query 3).
+- No new indexes were created.
+
+### Earlier experiments (previous query definitions)
+
+The experiments below were run before Queries 1–3 were aligned with MongoDB. They used the earlier versions of those queries, which are kept in Git history; the times do not apply to the current Q1–Q3.
+
+#### Controlled results: `idx_ratings_score_votes`
 
 | Query | Without index (invisible) | With index (visible) | Median without | Median with | Effect |
 |---|---|---|---:|---:|---|
@@ -121,7 +156,7 @@ All other lookups use the primary keys. `title_principals` is clustered on (`tco
 
 Based on these results, `idx_ratings_score_votes` was made invisible. Q1 loses about 5% (0.232 s to 0.244 s), and Q2 runs in about 86 s instead of about 337 s.
 
-#### Why an index can make a query slower
+##### Why an index can make a query slower
 
 The only plan difference in both queries is how `title_ratings` is read: a table scan (in `tconst` order) without the index, or a covering index scan (in `averageRating` order) with it. The optimizer gives the two plans almost the same cost (about 177,000 vs. 179,000 in Q2) and picks the index because it is smaller and contains every column it needs from `title_ratings`.
 
@@ -132,19 +167,19 @@ The cost model does not account for what happens after this step. In Q2, every r
 
 The measured times (3.9x slower) and the plans are consistent with this explanation, but the explanation itself is inferred; we did not measure page reads per configuration. In general, an index helps when it lets the database read much less data. Here the index only replaced a 60 MB scan, and the order it produced made the much larger joins slower.
 
-### Single measured runs (Q3, Q4, Q5)
+#### Single measured runs (Q3, Q4, Q5)
 
 | Query | Time | Configuration when measured | Applies to final configuration? |
 |---|---:|---|---|
-| Q3 | 2 min 9.5 s | All indexes visible | Yes: the plan does not use `idx_ratings_score_votes`, and its structure is the same in the final configuration |
-| Q4 | 32.0 s | All indexes visible | Yes: same reason |
+| Q3 (earlier version) | 2 min 9.5 s | All indexes visible | No: Query 3 has changed since |
+| Q4 | 32.0 s | All indexes visible | Yes: the plan does not use `idx_ratings_score_votes` |
 | Q5 | 1 h 4 min 42.3 s | `idx_ratings_score_votes` visible | **No**: the final plan reads `title_ratings` with a table scan, and this plan was not timed |
 
 Q5 takes about 65 minutes, so it was run once and not repeated. Its plan has the same difference as Q2 (index scan vs. table scan on `title_ratings`), so it may also be faster with the index invisible, but **Q5's runtime without the ratings index has not been measured**. Most of Q5's time is spent on temporary tables (about 3.7 GB) that do not fit in the 1 GB TempTable memory limit and go to disk, which the index does not affect.
 
-### Experiment: index on `title_principals(nconst)`
+#### Experiment: index on `title_principals(nconst)`
 
-Queries 2 and 3 start from people (deceased actors), so we tested an index on `title_principals(nconst)`:
+The earlier Queries 2 and 3 started from people (deceased actors), so we tested an index on `title_principals(nconst)`:
 
 - Build: 3 min 17 s, 3.46 GB.
 - The optimizer did not use it for any of the five queries.
@@ -160,7 +195,10 @@ The optimizer expected 17 credits per person; the actual average was 60–79. Ea
 
 ### Saved evidence
 
-The raw outputs behind every number in this section (run outputs with timings, `EXPLAIN` plans, the index experiments, and the verification exports) are in `results/final/`. `results/final/verification/verify.py` recomputes the Q2, Q3 and Q5 checks from the saved exports without a database.
+The raw outputs behind every number in this section are saved in the repository:
+
+- `results/aligned/`: the current Queries 1–3 (runs, plans, `EXPLAIN ANALYZE` of Q2, and verification checks).
+- `results/final/`: Queries 4 and 5, and the earlier experiments (earlier Q1–Q3 runs, the `nconst` index experiment, and `verify.py`, which recomputes the earlier Q2/Q3 checks and the Q5 checks offline).
 
 The benchmark table in the previous version of this document was for an earlier set of queries and has been replaced.
 
@@ -171,9 +209,6 @@ From the project directory:
     mysql -u root -p < data/mysql/query1.sql
 
 Replace `query1.sql` with the desired query file. Expected runtimes on our machine are listed above (Q5 takes about an hour).
-
-To change the decade for Query 1, edit `@decade_start` at the top of `query1.sql`.
-
 ## Loading the Data
 
 Place the seven cleaned IMDb CSV files in `data/clean/`.
@@ -229,9 +264,10 @@ We kept these fields in their original form to preserve the dataset structure an
 ## Limitations and Assumptions
 
 - **Server memory:** all timings come from one machine with the default 128 MB buffer pool. Q2, Q3 and Q5 are limited by disk reads and would behave differently with more memory.
-- **Number of runs:** Q1 has 3 runs per configuration and Q2 has 2. Q3 and Q4 have one run each. Q5 has one run, made with `idx_ratings_score_votes` visible; its runtime in the final configuration (index invisible) has not been measured.
+- **Number of runs:** Q1 has 3 runs per configuration, Q2 and Q3 have 3 runs each, and Q4 has one run. Q5 has one run, made with `idx_ratings_score_votes` visible; its runtime in the final configuration (index invisible) has not been measured.
+- **MongoDB comparison:** the MongoDB database was not available on this machine, so the equivalence with `mongo_queries.py` is based on reading the pipelines and on the checks above, not on comparing actual MongoDB output. Where MongoDB leaves tie order unspecified, its row order (but, per the checks above, not its set of top-20 rows) can differ from MySQL's.
 - **Invisible indexes:** baseline runs use invisible indexes, which approximate but do not recreate an unindexed database.
 - **Year precision:** IMDb only provides years. Q2 counts a movie as posthumous only if `startYear > deathYear`, so movies released in the year of death do not count. Q3 includes credits in the birth and death years.
 - **Data quality:** some IMDb records have implausible years (for example, credits before birth). Q3 excludes them, but birth and death years themselves are taken as given.
 - **No foreign keys:** inner joins skip credits that reference missing titles or people. Q5 handles people missing from `name_basics` in the same way as the MongoDB version.
-- **Q1 decade:** the decade ends at the current year (2026 when measured), so the result can change as new movies and votes are added.
+- **Changing data:** results depend on the IMDb snapshot (for example, the 2020s winner in Q1 can change as new movies and votes are added).

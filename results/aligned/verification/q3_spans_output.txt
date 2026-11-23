@@ -1,0 +1,106 @@
+--------------
+USE imdb
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Span distribution near the top-20 cut-off.
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Query 3: Longest Careers
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- Same result as longest_careers() in mongo_queries.py:
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+--   people with a known birth and death year, using every principal credit
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+--   (any category, any title type) on titles with a known start year that
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+--   falls between the birth and death years (inclusive).
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+--   career span = last valid credit year - first valid credit year.
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- MongoDB's CAREER_MIN_SPAN shortcut is not needed here: this query computes
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+-- the span for every eligible person directly.
+--------------
+
+Query OK, 0 rows affected (0.000 sec)
+
+--------------
+WITH eligible_people AS (
+    SELECT nconst, primaryName, birthYear, deathYear
+    FROM name_basics
+    WHERE birthYear IS NOT NULL
+      AND deathYear IS NOT NULL
+)
+-- NO_MERGE keeps eligible_people as a small in-memory table (about 249,000
+-- rows). Without it, MySQL looks up name_basics on disk once per credit
+-- (about 100 million lookups). The hint changes only the plan, not the result.
+SELECT careerSpan, COUNT(*) AS people FROM (
+SELECT /*+ NO_MERGE(n) */
+    n.nconst,
+    n.primaryName,
+    n.birthYear,
+    n.deathYear,
+    MIN(b.startYear)                    AS firstYear,
+    MAX(b.startYear)                    AS lastYear,
+    MAX(b.startYear) - MIN(b.startYear) AS careerSpan
+FROM title_principals p
+JOIN eligible_people n ON n.nconst = p.nconst
+JOIN title_basics b    ON b.tconst = p.tconst
+WHERE b.startYear IS NOT NULL
+  AND b.startYear BETWEEN n.birthYear AND n.deathYear   -- no credits before birth or after death
+GROUP BY n.nconst, n.primaryName, n.birthYear, n.deathYear
+) s GROUP BY careerSpan HAVING careerSpan >= 85 ORDER BY careerSpan DESC
+--------------
+
++------------+--------+
+| careerSpan | people |
++------------+--------+
+|         99 |      1 |
+|         95 |      1 |
+|         93 |      1 |
+|         92 |      1 |
+|         91 |      1 |
+|         90 |      1 |
+|         89 |      2 |
+|         88 |      9 |
+|         87 |      3 |
+|         86 |      9 |
+|         85 |      6 |
++------------+--------+
+11 rows in set (3 min 41.329 sec)
+
+Bye

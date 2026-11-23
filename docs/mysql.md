@@ -75,7 +75,8 @@ Implementation details:
 - The `fame` CTE is grouped to one row per person before it is joined back, so vote counts are not multiplied by duplicate joins. `SUM` over `INT` returns `DECIMAL` in MySQL, so large totals do not overflow.
 - People missing from `name_basics` get no fame value. They are still counted as credited people but add nothing to the score (`SUM` ignores `NULL`), which matches the MongoDB `$merge`/`$lookup` behavior.
 - All principal categories are included, and only rated movies are ranked.
-- MongoDB sorts by score only; the SQL adds `tconst` as a tiebreaker. The top 20 scores are all different, so this does not change the result. One edge case differs: a movie where nobody has a fame value scores `NULL` in SQL and `0` in MongoDB, which cannot reach the top 20.
+- If nobody credited on a movie has a fame value, `SUM` returns `NULL` but MongoDB's `$sum` returns `0`, so the score is wrapped in `COALESCE(..., 0)`. This affects exactly one rated movie (`tt43561434`, whose only credited person is missing from `name_basics`); all other scores are unchanged.
+- MongoDB sorts by score only; the SQL adds `tconst` as a tiebreaker. The top 20 scores are all different, so this does not change the result.
 - Top result: *Batman Begins* (2005), 23 credited people, star score 314,240,153.
 
 ## Verification
@@ -87,8 +88,22 @@ Each query was run against the full database, and its results were checked indep
 | Q1 | Each decade's winner was recomputed with `GROUP BY`/`MAX` instead of a window function; all 12 match. No decade has two movies tied on both rating and votes. |
 | Q2 | For 8 returned people and 3 controls (Heath Ledger, Paul Walker, James Dean), `knownForTitles` was split in Python and each title looked up directly; all picks and exclusions match. Only 187 people have a vote tie on their pick, and none at the top-20 vote level (≥ 43,417 votes), so the top 20 does not depend on tie order. |
 | Q3 | For 5 returned people, all raw credits (up to 6 categories and 9 title types per person) were recomputed in Python with MongoDB's rules; first year, last year and span match. The birth/death filter is active (8 of Mickey Rooney's credit years are excluded). Exactly 3 people have span 87 (the 20th place) and 17 have more, so the set of 20 people does not depend on tie order. |
-| Q4 | Counts match a direct `COUNT(*)` on `title_principals`. A second formulation (aggregate first, then filter movies) gave the same ranking, including a 7-way tie at 44 credits broken by `tconst`. |
-| Q5 | The formula was recomputed in Python from raw credit rows. *Primer* (17 credit rows, 10 people, one person credited 8 times) gives 309,875 in both Python and SQL. *Batman Begins* (25 credit rows, 23 people) gives 314,240,153 in both. |
+| Q4 | Counts match a direct `COUNT(*)` on `title_principals`. A second formulation (aggregate first, then filter movies) gave the same ranking, including a 7-way tie at 44 credits broken by `tconst`. No principal row has all non-key fields empty, so no row is dropped by `load_mongo.py` and `COUNT(*)` equals MongoDB's `$size` for every movie. |
+| Q5 | The formula was recomputed in Python from raw credit rows. *Primer* (17 credit rows, 10 people, one person credited 8 times) gives 309,875 in both Python and SQL (also after the `COALESCE` fix). *Batman Begins* (25 credit rows, 23 people) gives 314,240,153 in both. The one movie with no fame values scores 0 after the fix. |
+
+### Equivalence with MongoDB
+
+The MongoDB database was not available on this machine, so none of this is compared against actual MongoDB output. "Yes" means: by reading `mongo_queries.py`/`load_mongo.py` and testing the edge cases in MySQL (`results/aligned/audit/`), and assuming both databases were loaded from the same cleaned IMDb files.
+
+| Query | Same rows (top 20)? | Same values? | Same order? | Remaining difference |
+|---|---|---|---|---|
+| Q1 | Yes | Yes | Yes | None found; no decade has a tie |
+| Q2 | Yes | Yes | Yes | Tie order is unspecified in MongoDB, but no tie affects a pick at the top-20 vote level or the 20th/21st row |
+| Q3 | Yes | Yes | **Not guaranteed** | MongoDB sorts by span only; the order of people with equal spans (2 at 89, 9 at 88, 3 at 87) can differ. The set of 20 does not, because the 21st person has span 86 |
+| Q4 | Yes | Yes | Yes | None; both sort by count, then ID |
+| Q5 | Yes | Yes | Yes | The 21st score was not checked (it would need another 65-minute run), so an exact tie at the 20th place cannot be ruled out |
+
+Output columns differ in presentation only: the SQL also returns `tconst`/`nconst`, and the column names differ (for example `primaryTitle` vs. `title`).
 
 ## Indexing and Performance
 

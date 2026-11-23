@@ -34,8 +34,9 @@ SELECT
     r.numVotes,
     COUNT(*)                   AS creditedPeople,
     -- People without a fame row contribute NULL, which SUM ignores
-    -- (same as Mongo's $sum over a missing $lookup result).
-    SUM(f.fame - r.numVotes)   AS starScore
+    -- (same as Mongo's $sum over a missing $lookup result). If nobody on the
+    -- movie has a fame value, SUM is NULL but MongoDB's $sum is 0, so COALESCE.
+    COALESCE(SUM(f.fame - r.numVotes), 0) AS starScore
 FROM title_basics b
 JOIN title_ratings r ON r.tconst = b.tconst
 JOIN person_title pt ON pt.tconst = b.tconst
